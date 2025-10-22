@@ -1,0 +1,248 @@
+@property --cols {
+    inherits: false;
+    syntax: "<number>";
+    initial-value: 0;
+}
+
+@property --size {
+    inherits: true;
+    syntax: "<length>";
+    initial-value: 0;
+}
+
+@property --background {
+    inherits: true;
+    syntax: "<color>";
+    initial-value: #b7b8b8;
+}
+
+@property --background-hover {
+    inherits: true;
+    syntax: "<color>";
+    initial-value: #e3e3e3;
+}
+
+@property --interface-border-width {
+    inherits: true;
+    syntax: "<length>";
+    initial-value: 5px;
+}
+
+@property --interface-gap {
+    inherits: true;
+    syntax: "<length>";
+    initial-value: 7px;
+}
+
+@property --unrevealed-cell-border-width {
+    inherits: true;
+    syntax: "<length>";
+    initial-value: 3px;
+}
+
+.game {
+    display: flex;
+    flex-direction: column;
+    gap: var(--interface-gap);
+    width: fit-content;
+
+    background: var(--background);
+    border: var(--interface-border-width) outset var(--background);
+    padding: var(--interface-gap);
+
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.panel {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: var(--interface-gap);
+
+    & > * {
+        &:first-child {
+            display: flex;
+            align-self: center;
+        }
+
+        &:nth-child(2) {
+            display: flex;
+            place-content: center;
+        }
+
+        &:last-child {
+            display: flex;
+            place-content: end;
+        }
+    }
+
+    background: var(--background);
+    border: var(--interface-border-width) inset var(--background);
+}
+
+.marksLeft {
+    display: flex;
+    place-items: center;
+    gap: 0.2em;
+
+    font-size: 2em;
+}
+
+.clickable {
+    cursor: pointer;
+    --border-style: outset;
+    --border-color: var(--background);
+
+    &:hover {
+        --border-color: var(--background-hover);
+    }
+
+    &:active {
+        --border-color: var(--background);
+        --border-style: inset;
+    }
+}
+
+.avatar {
+    display: flex;
+    aspect-ratio: 1 / 1;
+    font-size: inherit;
+    line-height: 1;
+    place-items: center;
+    padding: var(--interface-gap);
+
+    background: var(--background);
+    border: var(--interface-border-width) var(--border-style) var(--border-color);
+}
+
+.field {
+    --size: 30px;
+
+    display: grid;
+    grid-template-columns: repeat(var(--cols), 1fr);
+    justify-content: center;
+    width: fit-content;
+
+    border: var(--interface-border-width) inset var(--background);
+}
+
+.cell {
+    --border-style: outset;
+    --border-color: var(--background);
+
+    aspect-ratio: 1 / 1;
+    width: var(--size);
+    font-size: calc(var(--size) / 2.1);
+    overflow: hidden;
+    position: relative;
+
+    &::before, &::after {
+        position: absolute;
+        inset: 0;
+    }
+
+    &::after {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        place-content: center;
+        place-items: center;
+
+        content: attr(data-content);
+    }
+
+    &.cell_notRevealed, &.cell_isMark {
+        &::before {
+            background: var(--background);
+            border: var(--unrevealed-cell-border-width) var(--border-style) var(--border-color);
+            content: '';
+        }
+    }
+
+    &:not(.cell_notRevealed) {
+        &:not(.cell_isMark) {
+            &::before {
+                background: var(--background);
+                border: 1px solid #7b7b7b;
+                content: '';
+            }
+        }
+
+        &.cell_isExplosion {
+            &::before {
+                background: red;
+            }
+        }
+
+        &.cell_isMissMark {
+            &::before {
+            }
+        }
+    }
+
+    &.cell_1 {
+        color: blue;
+    }
+
+    &.cell_2 {
+        color: green;
+    }
+
+    &.cell_3 {
+        color: red;
+    }
+
+    &.cell_4 {
+        color: darkblue;
+    }
+
+    &.cell_5 {
+        color: brown;
+    }
+
+    &.cell_6 {
+        color: Cyan;
+    }
+
+    &.cell_7 {
+        color: Black;
+    }
+
+    &.cell_8 {
+        color: Grey;
+    }
+}
+
+.cross {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+
+    &::before, &::after {
+        border-radius: 1px 1px 1px 1px;
+        content: '';
+        height: 2px;
+        width: calc(var(--size) * 2);
+        width: calc(100% * sqrt(2) - sqrt(2) * 6px);
+        background: red;
+
+        position: absolute;
+    }
+
+    &::before {
+        left: 0;
+        bottom: 0;
+
+        transform-origin: left center;
+        transform: translate(3px, -2px) rotate(-45deg);
+    }
+
+    &::after {
+        left: 0;
+        top: 0;
+
+        transform-origin: left center;
+        transform: translate(3px, 2px) rotate(45deg);
+
+    }
+}
