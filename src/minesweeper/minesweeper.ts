@@ -11,11 +11,14 @@ export type Snapshot = ReturnType<Minesweeper['getSnapShot']>;
 export class Minesweeper {
     readonly #cols: number;
     readonly #rows: number;
+    readonly #mines: number;
     readonly #field: Cell[][] = [];
     #marksLeft: number
     #explodedCell: [number, number] | null = null;
     #isWin = false;
     #isLose = false;
+    #fieldFilled = false;
+    readonly #preMarks = new Set<number>();
 
     constructor(cols: number, rows: number, mines: number) {
         if (!Minesweeper.#checkCols(cols)) {
@@ -34,8 +37,9 @@ export class Minesweeper {
             throw new Error("Invalid mines value");
         }
 
+        this.#mines = mines;
         this.#marksLeft = mines;
-        this.#fillField(mines);
+        // Field is filled lazily on first reveal so the first shot lands in a known-safe zone.
     }
 
     get #isGameOver() {
@@ -58,10 +62,30 @@ export class Minesweeper {
         return !(!Number.isInteger(rows) || rows < 1);
     }
 
-    static #getMinesSet(cells: number, mines: number): Set<number> {
-        const options = Array.from({length: cells}).map(
-            (_, index) => index
-        );
+    static #getMinesSet(cols: number, rows: number, mines: number, safeCol?: number, safeRow?: number): Set<number> {
+        const total = cols * rows;
+
+        // Build the safe zone (3x3 around the safe cell). Fall back to 1-cell or no exclusion
+        // if the level is dense enough that the wider zone leaves no room for all mines.
+        let exclude = new Set<number>();
+        if (safeCol !== undefined && safeRow !== undefined) {
+            for (let dc = -1; dc <= 1; dc++) {
+                for (let dr = -1; dr <= 1; dr++) {
+                    const c = safeCol + dc;
+                    const r = safeRow + dr;
+                    if (c >= 0 && c < cols && r >= 0 && r < rows) {
+                        exclude.add(r * cols + c);
+                    }
+                }
+            }
+            if (total - exclude.size < mines) {
+                exclude = new Set([safeRow * cols + safeCol]);
+                if (total - exclude.size < mines) exclude = new Set();
+            }
+        }
+
+        const options = Array.from({length: total}, (_, index) => index)
+            .filter((index) => !exclude.has(index));
 
         const result = new Set<number>();
 
@@ -78,8 +102,20 @@ export class Minesweeper {
             return;
         }
 
-        const [cell, col, row] = this.#getCell(param);
+        const [col, row] = this.#getCoords(param);
 
+        if (!this.#fieldFilled) {
+            this.#fillField(this.#mines, col, row);
+            // Replay pre-fill marks onto the freshly-created cells; marksLeft was already updated when each mark was added.
+            for (const idx of this.#preMarks) {
+                const c = idx % this.#cols;
+                const r = Math.floor(idx / this.#cols);
+                this.#field[c][r].mark();
+            }
+            this.#preMarks.clear();
+        }
+
+        const cell = this.#field[col][row];
         const isMine = cell.reveal(this.#isGameOver);
 
         if (isMine) {
@@ -109,7 +145,22 @@ export class Minesweeper {
             return;
         }
 
-        const cell = this.#getCell(param)[0];
+        const [col, row] = this.#getCoords(param);
+
+        if (!this.#fieldFilled) {
+            const idx = row * this.#cols + col;
+            if (this.#preMarks.has(idx)) {
+                this.#preMarks.delete(idx);
+                this.#marksLeft++;
+            } else {
+                if (this.#marksLeft === 0) return;
+                this.#preMarks.add(idx);
+                this.#marksLeft--;
+            }
+            return;
+        }
+
+        const cell = this.#field[col][row];
 
         if (!cell.isMarked && this.#marksLeft === 0) {
             return;
@@ -127,6 +178,16 @@ export class Minesweeper {
             isGameOver: this.#isGameOver ? this.#isWin ? win : lose : false,
             cells: (() => {
                 const result = [];
+
+                if (!this.#fieldFilled) {
+                    // Synthesized pre-fill snapshot: every cell is unrevealed; only #preMarks contribute marks.
+                    for (let row = 0; row < this.#rows; row++) {
+                        for (let col = 0; col < this.#cols; col++) {
+                            result.push(this.#preMarks.has(row * this.#cols + col) ? mark : cell);
+                        }
+                    }
+                    return result;
+                }
 
                 for (let row = 0; row < this.#rows; row++) {
                     for (let col = 0; col < this.#cols; col++) {
@@ -200,8 +261,8 @@ export class Minesweeper {
         }.bind(this);
     }
 
-    #fillField(mines: number): void {
-        const minesSet = Minesweeper.#getMinesSet(this.#cols * this.#rows, mines);
+    #fillField(mines: number, safeCol?: number, safeRow?: number): void {
+        const minesSet = Minesweeper.#getMinesSet(this.#cols, this.#rows, mines, safeCol, safeRow);
         const generatedField = Array.from({length: this.#cols}).reduce((board: Cell[][], _, col) => {
             board.push(
                 Array.from({length: this.#rows}).map((_, row) => {
@@ -216,6 +277,7 @@ export class Minesweeper {
 
         this.#field.push(...generatedField);
         this.#field.flat().forEach((cell) => cell.countNeighbourMines());
+        this.#fieldFilled = true;
     }
 
     #lose(): void {
@@ -235,24 +297,20 @@ export class Minesweeper {
         return [index % this.#cols, Math.floor(index / this.#cols)];
     }
 
-    #getCell(params: GetCellParams): [Cell, number, number] {
-        let col: number;
-        let row: number;
-
+    #getCoords(params: GetCellParams): [number, number] {
         if ('index' in params) {
-            [col, row] = this.#convertIndexToColAndRowPair(params.index);
-        } else {
-            if (!this.#checkCol(params.col)) {
-                throw new Error("Invalid col value");
-            }
-
-            if (!this.#checkRow(params.row)) {
-                throw new Error("Invalid row value");
-            }
-
-            [col, row] = [params.col, params.row];
+            const [col, row] = this.#convertIndexToColAndRowPair(params.index);
+            return [col, row];
         }
 
-        return [this.#field[col][row], col, row];
+        if (!this.#checkCol(params.col)) {
+            throw new Error("Invalid col value");
+        }
+
+        if (!this.#checkRow(params.row)) {
+            throw new Error("Invalid row value");
+        }
+
+        return [params.col, params.row];
     }
 }
