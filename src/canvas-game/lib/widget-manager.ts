@@ -128,6 +128,7 @@ export class WidgetManager {
     }
 
     handleContextMenu(cssX: number, cssY: number): void {
+        this.pressedId = 0;
         const w = this.pickAt(cssX, cssY);
         if (w instanceof Button && !isDisabled(w)) w.onContextMenu?.();
     }

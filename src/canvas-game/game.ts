@@ -37,6 +37,8 @@ import {
 const AIM_SPEED = 200; // px/sec
 const AIM_MAX_DT = 0.1; // seconds — clamp huge gaps after tab return / first frame
 const AIM_IDLE_MS = 45000; // show aim after this much inactivity post-first-shot
+const LONG_PRESS_MS = 400;
+const TAP_MOVE_SLOP = 10; // px before a touch is treated as a drag, not a tap
 
 type AimState = { x: number; y: number; vx: number; vy: number };
 
@@ -144,6 +146,10 @@ export class Game {
     private timerStart: number | null = null;
     private timerEnd: number | null = null;
     private rafId = 0;
+    private touchPressTimer: ReturnType<typeof setTimeout> | null = null;
+    private touchLongPressFired = false;
+    private touchStartX = 0;
+    private touchStartY = 0;
 
     constructor(
         container: HTMLElement,
@@ -156,6 +162,7 @@ export class Game {
         this.aimState = initAim(this.snapshot.cols * CELL_SIZE, this.snapshot.rows * CELL_SIZE);
 
         this.canvas = document.createElement('canvas');
+        this.canvas.style.touchAction = 'none';
         container.appendChild(this.canvas);
 
         const ctx = this.canvas.getContext('2d', {alpha: false});
@@ -170,6 +177,7 @@ export class Game {
 
     dispose(): void {
         if (this.rafId !== 0) globalThis.cancelAnimationFrame(this.rafId);
+        if (this.touchPressTimer !== null) clearTimeout(this.touchPressTimer);
         this.abortController.abort();
         this.canvas.remove();
     }
@@ -358,12 +366,14 @@ export class Game {
         }, {signal});
 
         this.canvas.addEventListener('mousedown', (event) => {
+            if (event.button !== 0) return;
             markActive();
             const {x, y} = getCanvasCoords(this.canvas, event);
             this.manager.handleMouseDown(x, y);
         }, {signal});
 
         this.canvas.addEventListener('mouseup', (event) => {
+            if (event.button !== 0) return;
             markActive();
             const {x, y} = getCanvasCoords(this.canvas, event);
             this.manager.handleMouseUp(x, y);
@@ -374,6 +384,67 @@ export class Game {
             markActive();
             const {x, y} = getCanvasCoords(this.canvas, event);
             this.manager.handleContextMenu(x, y);
+        }, {signal});
+
+        const cancelTouchTimer = () => {
+            if (this.touchPressTimer !== null) {
+                clearTimeout(this.touchPressTimer);
+                this.touchPressTimer = null;
+            }
+        };
+
+        this.canvas.addEventListener('touchstart', (event) => {
+            if (event.touches.length > 1) {
+                cancelTouchTimer();
+                this.touchLongPressFired = false;
+                this.manager.handleMouseLeave();
+                return;
+            }
+            event.preventDefault();
+            markActive();
+            const touch = event.touches[0];
+            const {x, y} = getCanvasCoords(this.canvas, touch);
+            this.touchStartX = x;
+            this.touchStartY = y;
+            this.touchLongPressFired = false;
+            this.manager.handleMouseDown(x, y);
+            this.touchPressTimer = setTimeout(() => {
+                this.touchPressTimer = null;
+                this.touchLongPressFired = true;
+                this.manager.handleContextMenu(x, y);
+            }, LONG_PRESS_MS);
+        }, {signal, passive: false});
+
+        this.canvas.addEventListener('touchmove', (event) => {
+            if (this.touchPressTimer === null) return;
+            const touch = event.touches[0];
+            if (!touch) return;
+            const {x, y} = getCanvasCoords(this.canvas, touch);
+            if (Math.hypot(x - this.touchStartX, y - this.touchStartY) > TAP_MOVE_SLOP) {
+                cancelTouchTimer();
+                this.manager.handleMouseLeave();
+            }
+        }, {signal});
+
+        this.canvas.addEventListener('touchend', (event) => {
+            const longPressFired = this.touchLongPressFired;
+            cancelTouchTimer();
+            this.touchLongPressFired = false;
+            if (longPressFired) return;
+            markActive();
+            const touch = event.changedTouches[0];
+            if (!touch) {
+                this.manager.handleMouseLeave();
+                return;
+            }
+            const {x, y} = getCanvasCoords(this.canvas, touch);
+            this.manager.handleMouseUp(x, y);
+        }, {signal});
+
+        this.canvas.addEventListener('touchcancel', () => {
+            cancelTouchTimer();
+            this.touchLongPressFired = false;
+            this.manager.handleMouseLeave();
         }, {signal});
     }
 
