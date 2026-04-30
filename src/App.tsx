@@ -70,6 +70,7 @@ function App() {
                 }}
                 onFieldMouseDown={handleFieldMouseDown}
                 onFieldMouseUp={handleFieldMouseUp}
+                onStart={handleNewGame}
             />
             <div className="game">
                 <div className="panel">

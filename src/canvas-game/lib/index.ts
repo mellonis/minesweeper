@@ -1,25 +1,27 @@
-import {drawField} from "./draw-field.ts";
-import {MouseStates} from "../types.ts";
-import {Snapshot as MinesweeperSnapshot} from "../../minesweeper";
-import {drawCounter, drawTimer} from "./draw-counter.ts";
-import {drawStartButton} from "./draw-game.ts";
+export {
+    BACKGROUND_COLOR,
+    CELL_SIZE,
+    COUNTER_BORDER_WIDTH,
+    COUNTER_DIGIT_HEIGHT,
+    COUNTER_DIGIT_WIDTH,
+    FIELD_X_POSITION,
+    FIELD_Y_POSITION,
+    GAME_HEIGHT_WITHOUT_FIELD_AND_PANEL,
+    GAME_PANEL_HEIGHT,
+    GAME_WIDTH_WITHOUT_FIELD,
+    INTERFACE_BORDER_WIDTH,
+    MARKS_COUNTER_X_POSITION,
+    MARKS_COUNTER_Y_POSITION,
+    START_BUTTON_SIZE,
+    START_BUTTON_Y_POSITION,
+    TIMER_Y_POSITION,
+} from "./consts.ts";
 
-export {CELL_SIZE, INTERFACE_BORDER_WIDTH, GAME_PANEL_HEIGHT} from "./consts.ts";
-
-export {getCanvasCoords, getFieldColAndRow} from "./utils.ts";
+export {getCanvasCoords} from "./utils.ts";
 export {prepareSprite} from "./sprites.ts";
-export {drawGame} from "./draw-game.ts";
+export {drawCommonCounter} from "./draw-counter.ts";
 
-export const render = (
-    context: CanvasRenderingContext2D,
-    mouseStates: MouseStates,
-    snapshot: MinesweeperSnapshot,
-    time: number
-) => {
-    drawCounter(context, snapshot.marksLeft);
-    drawTimer(context, snapshot.cols, time);
+export {Button, Canvas, Panel, Widget} from "./widgets.ts";
+export type {Bounds, ButtonParams, CanvasWidgetParams, PanelParams, WidgetState} from "./widgets.ts";
 
-    const isAboutToReveal = drawField(context, mouseStates, snapshot);
-
-    drawStartButton(context, isAboutToReveal, snapshot, mouseStates);
-}
+export {WidgetManager} from "./widget-manager.ts";
