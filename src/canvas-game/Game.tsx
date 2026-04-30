@@ -12,6 +12,7 @@ import {
 } from "./lib";
 import {MouseState, MouseStates} from "./types.ts";
 import {GAME_HEIGHT_WITHOUT_FIELD_AND_PANEL, GAME_WIDTH_WITHOUT_FIELD} from "./lib/consts.ts";
+import {useUpdatedOnRenderRef} from "../useUpdatedOnRenderRef.ts";
 
 type Props = {
     snapshot: MinesweeperSnapshot;
@@ -23,14 +24,11 @@ type Props = {
 
 export const Game: FC<Props> = (props) => {
     const canvasElementRef = useRef<HTMLCanvasElement>(null);
-    const propsRef = useRef(props);
-    propsRef.current = props;
+    const propsRef = useUpdatedOnRenderRef(props);
     const canvasProps = {
         height: props.snapshot.rows * CELL_SIZE + GAME_HEIGHT_WITHOUT_FIELD_AND_PANEL + GAME_PANEL_HEIGHT,
         width: props.snapshot.cols * CELL_SIZE + GAME_WIDTH_WITHOUT_FIELD,
     };
-    const canvasPropsRef = useRef(canvasProps);
-    canvasPropsRef.current = canvasProps
     const mouseStateRef = useRef<MouseStates>({state: MouseState.default, x: 0, y: 0});
 
     useEffect(() => {
@@ -59,7 +57,7 @@ export const Game: FC<Props> = (props) => {
         canvasElement.style.height = canvasProps.height + "px";
         context.scale(ratio, ratio);
         drawGame(context, propsRef.current.snapshot.cols, propsRef.current.snapshot.rows);
-    }, [canvasProps.height, canvasProps.width]);
+    }, [canvasProps.height, canvasProps.width, propsRef]);
 
     useEffect(() => {
         const {current: canvasElement} = canvasElementRef;
@@ -86,7 +84,7 @@ export const Game: FC<Props> = (props) => {
         return () => {
             globalThis.cancelAnimationFrame(animationFrameId);
         }
-    }, [canvasProps.height, canvasProps.width]);
+    }, [canvasProps.height, canvasProps.width, propsRef]);
 
     useEffect(() => {
         const {current: canvasElement} = canvasElementRef;
@@ -171,7 +169,7 @@ export const Game: FC<Props> = (props) => {
         return () => {
             abortController.abort();
         }
-    }, [canvasProps.height, canvasProps.width]);
+    }, [canvasProps.height, canvasProps.width, propsRef]);
 
     return <canvas key={`${props.snapshot.cols}x${props.snapshot.rows}`} ref={canvasElementRef} {...canvasProps}/>;
 };

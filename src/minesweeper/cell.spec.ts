@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it } from '@jest/globals';
 import { Cell } from './cell';
 
 describe('Cell', () => {
@@ -67,19 +68,21 @@ describe('Cell', () => {
         });
 
         it('should reveal neighbors for empty cell', () => {
-            // Create a cell with no neighboring mines
+            const neighbours: Cell[] = [];
             const emptyNeighboursGenerator = function* () {
-                yield new Cell(false, mockNeighboursGenerator);
-                yield new Cell(false, mockNeighboursGenerator);
+                for (const cell of neighbours) yield cell;
             };
+            neighbours.push(
+                new Cell(false, emptyNeighboursGenerator),
+                new Cell(false, emptyNeighboursGenerator),
+            );
+            neighbours.forEach((c) => c.countNeighbourMines());
 
             const cell = new Cell(false, emptyNeighboursGenerator);
             cell.countNeighbourMines();
             cell.reveal();
 
-            // Check if neighbors were revealed
-            const neighbors = [...emptyNeighboursGenerator()];
-            expect(neighbors.every(n => n.isRevealed)).toBe(true);
+            expect(neighbours.every(n => n.isRevealed)).toBe(true);
         });
     });
 
