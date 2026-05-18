@@ -19,7 +19,7 @@ Vanilla TypeScript, no framework. `src/main.ts` mounts a single `Game` instance 
 
 Framework-agnostic TypeScript. No DOM, no canvas.
 
-- `Minesweeper` (`minesweeper.ts`) owns the field, mine placement (deferred to first reveal with a 3×3 safe zone for first-click safety), win/lose state, and marks-left counter. Mutating methods are `reveal(...)` and `mark(...)`; both accept either `{col, row}` or `{index}`. Marks placed before the first reveal accumulate in `#preMarks` and are replayed onto the freshly-created cells when the field is filled.
+- `Minesweeper` (`minesweeper.ts`) owns the field, mine placement (deferred to first reveal with a 3×3 safe zone for first-click safety), win/lose state, and marks-left counter. Mutating methods are `reveal(...)` and `mark(...)`; both accept either `{col, row}` or `{index}`. `mark()` is a no-op before the first reveal (the field doesn't exist yet) and after game over.
 - `Cell` (`cell.ts`) is a private object held by `Minesweeper`. It uses a `NeighbourGeneratorFabric` (a `() => Generator<Cell>`) injected by `Minesweeper` so cells discover neighbours without holding a back-reference to the field. Flood-fill on zero-neighbour reveal is implemented by `Cell.reveal()` recursing through that generator — the engine itself doesn't loop. `setMine()` flips a cell to a mine before counting.
 - `getSnapShot()` is the only read interface. Returns a flat row-major `cells` array where each entry is a number (revealed neighbour count) or a symbol from `symbols.ts` (`cell`, `mark`, `mine`, `missMark`, `explosion`). `isGameOver` is `false` while playing or one of the `win` / `lose` symbols.
 - Symbols (`Symbol("…")`) are sentinel values — equality is by reference, so always import them from `./minesweeper`.
@@ -48,7 +48,7 @@ A reticle Canvas widget that follows the hovered cell or floats freely (continuo
 
 ### First-click safety
 
-Mines are placed in the engine on the first `reveal()` call, with a 3×3 exclusion zone around the clicked cell (falls back to 1-cell or no exclusion for pathological levels). Pre-fill marks live in a `#preMarks` Set on `Minesweeper` and are replayed onto the freshly-created cells; `getSnapShot()` synthesizes a pre-fill snapshot from `#preMarks` so the canvas can render the field before any reveal happens.
+Mines are placed in the engine on the first `reveal()` call, with a 3×3 exclusion zone around the clicked cell (falls back to 1-cell or no exclusion for pathological levels). `mark()` is rejected before the field is filled, so there is no pre-mark state — `getSnapShot()` returns an all-unrevealed snapshot before the first reveal.
 
 ## Deploy
 
