@@ -4,6 +4,21 @@ const MINES_MIN = 1;
 const SAFE_ZONE_RESERVED = 9; // keep a 3x3 worth of empty cells reachable post-save
 const AUTO_SHUFFLE_INTERVAL_MS = 1000;
 
+// Classic Minesweeper mine density at the three standard levels: beginner (10/81 ≈ 12.3%),
+// intermediate (40/256 ≈ 15.6%), expert (99/480 ≈ 20.6%). Densities rise with field size;
+// idealMineCount linearly interpolates between beginner and expert and clamps outside.
+const BEGINNER_TOTAL = 9 * 9;
+const EXPERT_TOTAL = 30 * 16;
+const BEGINNER_DENSITY = 10 / BEGINNER_TOTAL;
+const EXPERT_DENSITY = 99 / EXPERT_TOTAL;
+
+function idealMineCount(cols: number, rows: number): number {
+    const total = cols * rows;
+    const t = Math.max(0, Math.min(1, (total - BEGINNER_TOTAL) / (EXPERT_TOTAL - BEGINNER_TOTAL)));
+    const density = BEGINNER_DENSITY + t * (EXPERT_DENSITY - BEGINNER_DENSITY);
+    return Math.max(MINES_MIN, Math.round(total * density));
+}
+
 export interface ConfigPanelOptions {
     initialCols: number;
     initialRows: number;
@@ -148,14 +163,13 @@ export class ConfigPanel {
             else this.mines = next;
 
             if (axis !== 'mines') {
-                // cols/rows change shifts the mines ceiling — re-clamp.
+                // cols/rows change shifts the mines ceiling and re-snaps mines to the ideal
+                // count for the new size. User can still tune mines manually afterwards.
                 const newMax = this.maxMines();
                 this.minesRow.input.max = String(newMax);
-                if (this.mines > newMax) {
-                    this.mines = newMax;
-                    this.minesRow.input.value = String(newMax);
-                    this.minesRow.valueLabel.textContent = String(newMax);
-                }
+                this.mines = Math.min(newMax, idealMineCount(this.cols, this.rows));
+                this.minesRow.input.value = String(this.mines);
+                this.minesRow.valueLabel.textContent = String(this.mines);
             }
 
             row.valueLabel.textContent = row.input.value;
