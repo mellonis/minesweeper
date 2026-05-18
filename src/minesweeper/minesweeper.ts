@@ -18,7 +18,6 @@ export class Minesweeper {
     #isWin = false;
     #isLose = false;
     #fieldFilled = false;
-    readonly #preMarks = new Set<number>();
 
     constructor(cols: number, rows: number, mines: number) {
         if (!Minesweeper.#checkCols(cols)) {
@@ -106,13 +105,6 @@ export class Minesweeper {
 
         if (!this.#fieldFilled) {
             this.#fillField(this.#mines, col, row);
-            // Replay pre-fill marks onto the freshly-created cells; marksLeft was already updated when each mark was added.
-            for (const idx of this.#preMarks) {
-                const c = idx % this.#cols;
-                const r = Math.floor(idx / this.#cols);
-                this.#field[c][r].mark();
-            }
-            this.#preMarks.clear();
         }
 
         const cell = this.#field[col][row];
@@ -141,25 +133,11 @@ export class Minesweeper {
     }
 
     mark(param: GetCellParams) {
-        if (this.#isGameOver) {
+        if (this.#isGameOver || !this.#fieldFilled) {
             return;
         }
 
         const [col, row] = this.#getCoords(param);
-
-        if (!this.#fieldFilled) {
-            const idx = row * this.#cols + col;
-            if (this.#preMarks.has(idx)) {
-                this.#preMarks.delete(idx);
-                this.#marksLeft++;
-            } else {
-                if (this.#marksLeft === 0) return;
-                this.#preMarks.add(idx);
-                this.#marksLeft--;
-            }
-            return;
-        }
-
         const cell = this.#field[col][row];
 
         if (!cell.isMarked && this.#marksLeft === 0) {
@@ -180,11 +158,8 @@ export class Minesweeper {
                 const result = [];
 
                 if (!this.#fieldFilled) {
-                    // Synthesized pre-fill snapshot: every cell is unrevealed; only #preMarks contribute marks.
-                    for (let row = 0; row < this.#rows; row++) {
-                        for (let col = 0; col < this.#cols; col++) {
-                            result.push(this.#preMarks.has(row * this.#cols + col) ? mark : cell);
-                        }
+                    for (let i = 0; i < this.#cols * this.#rows; i++) {
+                        result.push(cell);
                     }
                     return result;
                 }
