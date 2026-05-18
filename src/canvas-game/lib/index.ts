@@ -25,3 +25,6 @@ export {Button, Canvas, Panel, Widget} from "./widgets.ts";
 export type {Bounds, ButtonParams, CanvasWidgetParams, PanelParams, WidgetState} from "./widgets.ts";
 
 export {WidgetManager} from "./widget-manager.ts";
+
+export {PreviewRenderer} from "./preview-renderer.ts";
+export {FlipAnimation, flipDuration} from "./flip-animation.ts";

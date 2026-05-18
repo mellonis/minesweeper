@@ -8,6 +8,47 @@ export type GetCellParams = {
 
 export type Snapshot = ReturnType<Minesweeper['getSnapShot']>;
 
+// Module-level so both the live game and the static `Minesweeper.preview` factory share placement.
+function placeMines(
+    cols: number,
+    rows: number,
+    mines: number,
+    safeCol?: number,
+    safeRow?: number,
+): Set<number> {
+    const total = cols * rows;
+
+    // Build the safe zone (3x3 around the safe cell). Fall back to 1-cell or no exclusion
+    // if the level is dense enough that the wider zone leaves no room for all mines.
+    let exclude = new Set<number>();
+    if (safeCol !== undefined && safeRow !== undefined) {
+        for (let dc = -1; dc <= 1; dc++) {
+            for (let dr = -1; dr <= 1; dr++) {
+                const c = safeCol + dc;
+                const r = safeRow + dr;
+                if (c >= 0 && c < cols && r >= 0 && r < rows) {
+                    exclude.add(r * cols + c);
+                }
+            }
+        }
+        if (total - exclude.size < mines) {
+            exclude = new Set([safeRow * cols + safeCol]);
+            if (total - exclude.size < mines) exclude = new Set();
+        }
+    }
+
+    const options = Array.from({length: total}, (_, index) => index)
+        .filter((index) => !exclude.has(index));
+
+    const result = new Set<number>();
+    while (mines--) {
+        const index = Math.floor(Math.random() * options.length);
+        result.add(options.splice(index, 1)[0]);
+    }
+
+    return result;
+}
+
 export class Minesweeper {
     readonly #cols: number;
     readonly #rows: number;
@@ -61,39 +102,42 @@ export class Minesweeper {
         return !(!Number.isInteger(rows) || rows < 1);
     }
 
-    static #getMinesSet(cols: number, rows: number, mines: number, safeCol?: number, safeRow?: number): Set<number> {
-        const total = cols * rows;
+    static preview(cols: number, rows: number, mines: number): Snapshot {
+        if (!Minesweeper.#checkCols(cols)) throw new Error("Invalid cols value");
+        if (!Minesweeper.#checkRows(rows)) throw new Error("Invalid rows value");
+        if (!Minesweeper.#checkMinesCount(cols, rows, mines)) throw new Error("Invalid mines value");
 
-        // Build the safe zone (3x3 around the safe cell). Fall back to 1-cell or no exclusion
-        // if the level is dense enough that the wider zone leaves no room for all mines.
-        let exclude = new Set<number>();
-        if (safeCol !== undefined && safeRow !== undefined) {
-            for (let dc = -1; dc <= 1; dc++) {
-                for (let dr = -1; dr <= 1; dr++) {
-                    const c = safeCol + dc;
-                    const r = safeRow + dr;
-                    if (c >= 0 && c < cols && r >= 0 && r < rows) {
-                        exclude.add(r * cols + c);
+        const minePositions = placeMines(cols, rows, mines);
+        const cells: (number | typeof mine)[] = new Array(cols * rows);
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const index = row * cols + col;
+                if (minePositions.has(index)) {
+                    cells[index] = mine;
+                    continue;
+                }
+                let count = 0;
+                for (let dc = -1; dc <= 1; dc++) {
+                    for (let dr = -1; dr <= 1; dr++) {
+                        if (dc === 0 && dr === 0) continue;
+                        const nc = col + dc;
+                        const nr = row + dr;
+                        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+                        if (minePositions.has(nr * cols + nc)) count++;
                     }
                 }
-            }
-            if (total - exclude.size < mines) {
-                exclude = new Set([safeRow * cols + safeCol]);
-                if (total - exclude.size < mines) exclude = new Set();
+                cells[index] = count;
             }
         }
 
-        const options = Array.from({length: total}, (_, index) => index)
-            .filter((index) => !exclude.has(index));
-
-        const result = new Set<number>();
-
-        while (mines--) {
-            const index = Math.floor(Math.random() * options.length);
-            result.add(options.splice(index, 1)[0]);
-        }
-
-        return result;
+        return {
+            cols,
+            rows,
+            cells,
+            marksLeft: mines,
+            isGameOver: false,
+        };
     }
 
     reveal(param: GetCellParams) {
@@ -147,6 +191,28 @@ export class Minesweeper {
         const result = cell.mark();
 
         this.#marksLeft += result;
+    }
+
+    getRevealedSnapshot(): Snapshot {
+        if (!this.#fieldFilled) {
+            return this.getSnapShot();
+        }
+
+        const cells: (number | typeof mine)[] = [];
+        for (let row = 0; row < this.#rows; row++) {
+            for (let col = 0; col < this.#cols; col++) {
+                const c = this.#field[col][row];
+                cells.push(c.isMine ? mine : c.neighbourMinesCount);
+            }
+        }
+
+        return {
+            cols: this.#cols,
+            rows: this.#rows,
+            cells,
+            marksLeft: this.#marksLeft,
+            isGameOver: false,
+        };
     }
 
     getSnapShot() {
@@ -237,7 +303,7 @@ export class Minesweeper {
     }
 
     #fillField(mines: number, safeCol?: number, safeRow?: number): void {
-        const minesSet = Minesweeper.#getMinesSet(this.#cols, this.#rows, mines, safeCol, safeRow);
+        const minesSet = placeMines(this.#cols, this.#rows, mines, safeCol, safeRow);
         const generatedField = Array.from({length: this.#cols}).reduce((board: Cell[][], _, col) => {
             board.push(
                 Array.from({length: this.#rows}).map((_, row) => {

@@ -18,6 +18,7 @@ import {
     drawCommonCounter,
     FIELD_X_POSITION,
     FIELD_Y_POSITION,
+    FlipAnimation,
     GAME_HEIGHT_WITHOUT_FIELD_AND_PANEL,
     GAME_PANEL_HEIGHT,
     GAME_WIDTH_WITHOUT_FIELD,
@@ -27,6 +28,7 @@ import {
     MARKS_COUNTER_Y_POSITION,
     Panel,
     prepareSprite,
+    PreviewRenderer,
     START_BUTTON_SIZE,
     START_BUTTON_Y_POSITION,
     TIMER_Y_POSITION,
@@ -146,6 +148,10 @@ export class Game {
     private lastActivity = -1;
     private timerStart: number | null = null;
     private timerEnd: number | null = null;
+    private pausedAt: number | null = null;
+    private previewRenderer: PreviewRenderer | null = null;
+    private flipAnimation: FlipAnimation | null = null;
+    private pickOverlay = false;
     private rafId = 0;
     private touchPressTimer: ReturnType<typeof setTimeout> | null = null;
     private touchLongPressFired = false;
@@ -172,6 +178,7 @@ export class Game {
         this.buildWidgets();
         this.attachListeners();
         this.startRenderLoop();
+        this.playNewGameFlip();
     }
 
     dispose(): void {
@@ -264,7 +271,7 @@ export class Game {
             },
             render: (c) => {
                 if (this.timerStart === null) return drawCommonCounter(c, 888);
-                const end = this.timerEnd ?? performance.now();
+                const end = this.timerEnd ?? this.pausedAt ?? performance.now();
                 drawCommonCounter(c, Math.floor((end - this.timerStart) / 1000));
             },
         }));
@@ -462,12 +469,153 @@ export class Game {
     }
 
     setLevel(cols: number, rows: number, mines: number): void {
+        // Preset path. Any active config preview/flip is discarded; a synthetic preview seeds
+        // the opening close-flip so a fresh game still gets the cascade reveal animation.
+        this.teardownPreview();
+        this.teardownFlip();
+        this.pausedAt = null;
         this.currentLevel = [cols, rows, mines];
         this.resetGame();
+        this.playNewGameFlip();
+    }
+
+    applyConfigSave(cols: number, rows: number, mines: number, fromSnapshot: MinesweeperSnapshot): void {
+        // Save from config panel: like setLevel, but uses the panel's last preview as the
+        // close-flip source instead of a freshly-synthesized layout.
+        this.teardownPreview();
+        this.teardownFlip();
+        this.pausedAt = null;
+        this.currentLevel = [cols, rows, mines];
+        this.resetGame();
+        this.startFlip(fromSnapshot, this.snapshot);
+    }
+
+    private playNewGameFlip(): void {
+        const [cols, rows, mines] = this.currentLevel;
+        // Clear-field source: every cell appears as a flat revealed-empty square that flips
+        // up into the raised unrevealed state. No mines or numbers leak into the cascade.
+        const cells = new Array(cols * rows).fill(0) as MinesweeperSnapshot['cells'];
+        const fromSnap: MinesweeperSnapshot = {cols, rows, cells, marksLeft: mines, isGameOver: false};
+        // Aim shows only after the cascade lands — it peeks through the gaps between cells.
+        this.aimVisible = false;
+        this.startFlip(fromSnap, this.snapshot, () => {
+            if (this.snapshot.isGameOver !== false) return;
+            this.aimVisible = true;
+            this.aimState = initAim(this.snapshot.cols * CELL_SIZE, this.snapshot.rows * CELL_SIZE);
+        });
+    }
+
+    pause(): void {
+        if (this.previewRenderer !== null || this.flipAnimation !== null) return;
+        this.pausedAt = performance.now();
+        this.aimVisible = false;
+        const fromSnap = this.snapshot;
+        const toSnap = this.minesweeper.getRevealedSnapshot();
+        this.snapshot = toSnap;
+        this.startFlip(fromSnap, toSnap, () => this.addPreviewRenderer(toSnap));
+    }
+
+    resume(): void {
+        if (this.previewRenderer === null && this.flipAnimation === null) return;
+        this.teardownFlip();
+        this.teardownPreview();
+
+        // If preview dragged through different dims, the canvas/chrome were resized to follow.
+        // Snap back to the running game's actual dims here.
+        const prevSnapshot = this.snapshot;
+        this.snapshot = this.minesweeper.getSnapShot();
+        if (
+            this.snapshot.cols !== prevSnapshot.cols ||
+            this.snapshot.rows !== prevSnapshot.rows
+        ) {
+            this.setupCanvas();
+            this.buildWidgets();
+        }
+
+        if (this.pausedAt !== null && this.timerStart !== null && this.timerEnd === null) {
+            this.timerStart += performance.now() - this.pausedAt;
+        }
+        this.pausedAt = null;
+    }
+
+    setPreviewSnapshot(snapshot: MinesweeperSnapshot): void {
+        if (this.previewRenderer === null && this.flipAnimation === null) return;
+        // User interacted with sliders — abort any in-flight flip and ensure preview is showing.
+        this.teardownFlip();
+
+        const dimsChanged =
+            snapshot.cols !== this.snapshot.cols || snapshot.rows !== this.snapshot.rows;
+        this.snapshot = snapshot;
+
+        if (dimsChanged) {
+            // Whole canvas (chrome + field) follows the slider; preview always renders at native
+            // CELL_SIZE inside the resized field. buildWidgets() wipes the manager.
+            this.setupCanvas();
+            this.buildWidgets();
+            this.previewRenderer = null;
+        }
+
+        if (this.previewRenderer === null) {
+            this.addPreviewRenderer(snapshot);
+        } else {
+            this.previewRenderer.setSnapshot(snapshot);
+        }
+    }
+
+    setPickOverlay(enabled: boolean): void {
+        this.pickOverlay = enabled;
+    }
+
+    private addPreviewRenderer(snapshot: MinesweeperSnapshot): void {
+        const fieldWidth = snapshot.cols * CELL_SIZE;
+        const fieldHeight = snapshot.rows * CELL_SIZE;
+        this.previewRenderer = new PreviewRenderer({
+            bounds: {x: FIELD_X_POSITION, y: FIELD_Y_POSITION, w: fieldWidth, h: fieldHeight},
+            z: 20,
+            snapshot,
+        });
+        this.manager.add(this.previewRenderer);
+    }
+
+    private startFlip(
+        fromSnapshot: MinesweeperSnapshot,
+        toSnapshot: MinesweeperSnapshot,
+        onComplete?: () => void,
+    ): void {
+        const fieldWidth = toSnapshot.cols * CELL_SIZE;
+        const fieldHeight = toSnapshot.rows * CELL_SIZE;
+        this.flipAnimation = new FlipAnimation({
+            bounds: {x: FIELD_X_POSITION, y: FIELD_Y_POSITION, w: fieldWidth, h: fieldHeight},
+            z: 25,
+            fromSnapshot,
+            toSnapshot,
+            startTime: performance.now(),
+            onComplete: () => {
+                this.teardownFlip();
+                onComplete?.();
+            },
+        });
+        this.manager.add(this.flipAnimation);
+    }
+
+    private teardownPreview(): void {
+        if (this.previewRenderer !== null) {
+            this.manager.remove(this.previewRenderer);
+            this.previewRenderer = null;
+        }
+    }
+
+    private teardownFlip(): void {
+        if (this.flipAnimation !== null) {
+            this.manager.remove(this.flipAnimation);
+            this.flipAnimation = null;
+        }
     }
 
     private handleStart(): void {
+        this.teardownFlip();
         this.resetGame();
+        this.playNewGameFlip();
     }
 
     private resetGame(): void {
@@ -498,6 +646,7 @@ export class Game {
         let lastSecond = -1;
         let lastAimTime = -1;
         let lastAimVisible = false;
+        let lastPickOverlay = false;
 
         const render = () => {
             const snapshot = this.snapshot;
@@ -513,7 +662,7 @@ export class Game {
                 if (snapshot.isGameOver === false && snapshot.cells.every(c => c === cellSymbol)) {
                     this.timerStart = null;
                     this.timerEnd = null;
-                    if (!this.aimVisible) {
+                    if (!this.aimVisible && this.flipAnimation === null) {
                         this.aimVisible = true;
                         this.aimState = initAim(snapshot.cols * CELL_SIZE, snapshot.rows * CELL_SIZE);
                     }
@@ -530,6 +679,7 @@ export class Game {
 
             if (!this.aimVisible
                 && snapshot.isGameOver === false
+                && this.pausedAt === null
                 && this.lastActivity >= 0
                 && now - this.lastActivity > AIM_IDLE_MS) {
                 this.aimVisible = true;
@@ -556,14 +706,19 @@ export class Game {
                 || press !== lastPress
                 || (timerRunning && second !== lastSecond)
                 || aimMoved
-                || aimVisibilityChanged) {
+                || aimVisibilityChanged
+                || this.previewRenderer !== null
+                || this.flipAnimation !== null
+                || this.pickOverlay !== lastPickOverlay) {
                 this.canvas.style.cursor = hover ? 'pointer' : 'default';
                 this.manager.draw(this.ctx);
+                if (this.pickOverlay) this.manager.drawPickOverlay(this.ctx);
                 lastSnapshot = snapshot;
                 lastHover = hover;
                 lastPress = press;
                 lastSecond = second;
                 lastAimVisible = aimVisible;
+                lastPickOverlay = this.pickOverlay;
             }
 
             this.rafId = globalThis.requestAnimationFrame(render);
