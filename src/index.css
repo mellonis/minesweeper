@@ -59,6 +59,20 @@ body {
     border-color: #636464 #ffffff #ffffff #636464;
 }
 
+@media (max-width: 600px) {
+    .presets {
+        flex-direction: column;
+        align-self: stretch;
+        gap: 6px;
+    }
+
+    .presets button {
+        width: 100%;
+        padding: 12px 16px;
+        box-sizing: border-box;
+    }
+}
+
 .config-panel-backdrop {
     position: fixed;
     inset: 0;
