@@ -8,9 +8,11 @@ export interface ConfigPanelOptions {
     initialCols: number;
     initialRows: number;
     initialMines: number;
+    initialPickOverlay?: boolean;
     onLiveChange: (cols: number, rows: number, mines: number) => void;
     onSave: (cols: number, rows: number, mines: number) => void;
     onCancel: () => void;
+    onPickOverlayChange?: (enabled: boolean) => void;
     onDragStart?: () => void;
     onDragEnd?: () => void;
 }
@@ -55,6 +57,23 @@ export class ConfigPanel {
         panel.appendChild(this.colsRow.container);
         panel.appendChild(this.rowsRow.container);
         panel.appendChild(this.minesRow.container);
+
+        // Debug toggle: overlays the internal color-keyed pick canvas used by WidgetManager for
+        // hit-testing. Each interactive widget appears as a flat color region — the literal data
+        // the hit-test reads to resolve a mouse position to a widget.
+        const optionRow = document.createElement('div');
+        optionRow.className = 'config-panel-option';
+        const pickLabel = document.createElement('label');
+        const pickCheckbox = document.createElement('input');
+        pickCheckbox.type = 'checkbox';
+        pickCheckbox.checked = options.initialPickOverlay ?? false;
+        pickCheckbox.addEventListener('change', () => {
+            this.options.onPickOverlayChange?.(pickCheckbox.checked);
+        }, {signal: this.abortController.signal});
+        pickLabel.appendChild(pickCheckbox);
+        pickLabel.appendChild(document.createTextNode(' Show hit-test overlay'));
+        optionRow.appendChild(pickLabel);
+        panel.appendChild(optionRow);
 
         const actions = document.createElement('div');
         actions.className = 'config-panel-actions';

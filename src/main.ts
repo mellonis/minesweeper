@@ -17,6 +17,7 @@ const game = new Game(root, currentLevel);
 
 let activePanel: ConfigPanel | null = null;
 let lastPreviewSnapshot: ReturnType<typeof Minesweeper.preview> | null = null;
+let pickOverlay = false;
 
 const openCustomPanel = () => {
     if (activePanel !== null) return;
@@ -27,6 +28,7 @@ const openCustomPanel = () => {
         initialCols: cols,
         initialRows: rows,
         initialMines: mines,
+        initialPickOverlay: pickOverlay,
         onLiveChange: (c, r, m) => {
             lastPreviewSnapshot = Minesweeper.preview(c, r, m);
             game.setPreviewSnapshot(lastPreviewSnapshot);
@@ -45,6 +47,10 @@ const openCustomPanel = () => {
             activePanel?.dispose();
             activePanel = null;
             lastPreviewSnapshot = null;
+        },
+        onPickOverlayChange: (enabled) => {
+            pickOverlay = enabled;
+            game.setPickOverlay(enabled);
         },
     });
 };

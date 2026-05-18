@@ -151,6 +151,7 @@ export class Game {
     private pausedAt: number | null = null;
     private previewRenderer: PreviewRenderer | null = null;
     private flipAnimation: FlipAnimation | null = null;
+    private pickOverlay = false;
     private rafId = 0;
     private touchPressTimer: ReturnType<typeof setTimeout> | null = null;
     private touchLongPressFired = false;
@@ -543,6 +544,10 @@ export class Game {
         }
     }
 
+    setPickOverlay(enabled: boolean): void {
+        this.pickOverlay = enabled;
+    }
+
     private addPreviewRenderer(snapshot: MinesweeperSnapshot): void {
         const fieldWidth = snapshot.cols * CELL_SIZE;
         const fieldHeight = snapshot.rows * CELL_SIZE;
@@ -621,6 +626,7 @@ export class Game {
         let lastSecond = -1;
         let lastAimTime = -1;
         let lastAimVisible = false;
+        let lastPickOverlay = false;
 
         const render = () => {
             const snapshot = this.snapshot;
@@ -682,14 +688,17 @@ export class Game {
                 || aimMoved
                 || aimVisibilityChanged
                 || this.previewRenderer !== null
-                || this.flipAnimation !== null) {
+                || this.flipAnimation !== null
+                || this.pickOverlay !== lastPickOverlay) {
                 this.canvas.style.cursor = hover ? 'pointer' : 'default';
                 this.manager.draw(this.ctx);
+                if (this.pickOverlay) this.manager.drawPickOverlay(this.ctx);
                 lastSnapshot = snapshot;
                 lastHover = hover;
                 lastPress = press;
                 lastSecond = second;
                 lastAimVisible = aimVisible;
+                lastPickOverlay = this.pickOverlay;
             }
 
             this.rafId = globalThis.requestAnimationFrame(render);

@@ -86,6 +86,17 @@ export class WidgetManager {
         }
     }
 
+    // Debug overlay: blit the internal color-keyed pick canvas (the offscreen buffer used to
+    // resolve mouse positions to widgets) onto the given context. Each interactive widget
+    // appears as a flat color region — the literal data the hit-test reads.
+    drawPickOverlay(ctx: CanvasRenderingContext2D, alpha = 0.55): void {
+        if (this.layoutDirty) this.repaintPickCanvas();
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(this.pickCanvas, 0, 0, this.cssWidth, this.cssHeight);
+        ctx.restore();
+    }
+
     handleMouseMove(cssX: number, cssY: number): void {
         this.lastMouseX = cssX;
         this.lastMouseY = cssY;

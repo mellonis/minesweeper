@@ -122,6 +122,19 @@ body {
     font-size: 0.85rem;
 }
 
+.config-panel-option {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.config-panel-option label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
 .config-panel-actions {
     display: flex;
     gap: 8px;
