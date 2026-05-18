@@ -194,7 +194,8 @@ export class Game {
         this.canvas.width = this.canvasWidth * dpr;
         this.canvas.height = this.canvasHeight * dpr;
         this.canvas.style.width = this.canvasWidth + 'px';
-        this.canvas.style.height = this.canvasHeight + 'px';
+        // No inline style.height — the CSS rule `height: auto` lets the browser preserve the
+        // aspect ratio when max-width: 100% shrinks the canvas on narrow viewports.
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.manager.resize(this.canvasWidth, this.canvasHeight);
     }
