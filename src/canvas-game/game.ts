@@ -178,6 +178,7 @@ export class Game {
         this.buildWidgets();
         this.attachListeners();
         this.startRenderLoop();
+        this.playNewGameFlip();
     }
 
     dispose(): void {
@@ -468,23 +469,40 @@ export class Game {
     }
 
     setLevel(cols: number, rows: number, mines: number): void {
-        // Instant level change (preset path). Any active config preview/flip is discarded.
+        // Preset path. Any active config preview/flip is discarded; a synthetic preview seeds
+        // the opening close-flip so a fresh game still gets the cascade reveal animation.
         this.teardownPreview();
         this.teardownFlip();
         this.pausedAt = null;
         this.currentLevel = [cols, rows, mines];
         this.resetGame();
+        this.playNewGameFlip();
     }
 
     applyConfigSave(cols: number, rows: number, mines: number, fromSnapshot: MinesweeperSnapshot): void {
-        // Save from config panel: like setLevel, but plays a close-flip from the preview's
-        // last visible snapshot into the fresh game's unrevealed snapshot.
+        // Save from config panel: like setLevel, but uses the panel's last preview as the
+        // close-flip source instead of a freshly-synthesized layout.
         this.teardownPreview();
         this.teardownFlip();
         this.pausedAt = null;
         this.currentLevel = [cols, rows, mines];
         this.resetGame();
         this.startFlip(fromSnapshot, this.snapshot);
+    }
+
+    private playNewGameFlip(): void {
+        const [cols, rows, mines] = this.currentLevel;
+        // Clear-field source: every cell appears as a flat revealed-empty square that flips
+        // up into the raised unrevealed state. No mines or numbers leak into the cascade.
+        const cells = new Array(cols * rows).fill(0) as MinesweeperSnapshot['cells'];
+        const fromSnap: MinesweeperSnapshot = {cols, rows, cells, marksLeft: mines, isGameOver: false};
+        // Aim shows only after the cascade lands — it peeks through the gaps between cells.
+        this.aimVisible = false;
+        this.startFlip(fromSnap, this.snapshot, () => {
+            if (this.snapshot.isGameOver !== false) return;
+            this.aimVisible = true;
+            this.aimState = initAim(this.snapshot.cols * CELL_SIZE, this.snapshot.rows * CELL_SIZE);
+        });
     }
 
     pause(): void {
@@ -595,7 +613,9 @@ export class Game {
     }
 
     private handleStart(): void {
+        this.teardownFlip();
         this.resetGame();
+        this.playNewGameFlip();
     }
 
     private resetGame(): void {
@@ -642,7 +662,7 @@ export class Game {
                 if (snapshot.isGameOver === false && snapshot.cells.every(c => c === cellSymbol)) {
                     this.timerStart = null;
                     this.timerEnd = null;
-                    if (!this.aimVisible) {
+                    if (!this.aimVisible && this.flipAnimation === null) {
                         this.aimVisible = true;
                         this.aimState = initAim(snapshot.cols * CELL_SIZE, snapshot.rows * CELL_SIZE);
                     }
