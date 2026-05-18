@@ -1,14 +1,24 @@
 import './index.css';
-import {Game} from './canvas-game/game';
-import {Minesweeper} from './minesweeper';
+import {Game, type GameLevel} from './canvas-game/game';
 
-const levels = {
+const levels: Record<string, GameLevel> = {
     beginner: [9, 9, 10],
     intermediate: [16, 16, 40],
     expert: [30, 16, 99],
-} as const;
+};
 
 const root = document.getElementById('root');
 if (!root) throw new Error("#root not found");
 
-new Game(root, () => new Minesweeper(...levels.beginner));
+const game = new Game(root, levels.beginner);
+
+const presets = document.createElement('div');
+presets.className = 'presets';
+for (const [name, level] of Object.entries(levels)) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = name[0].toUpperCase() + name.slice(1);
+    button.addEventListener('click', () => game.setLevel(...level));
+    presets.appendChild(button);
+}
+root.appendChild(presets);

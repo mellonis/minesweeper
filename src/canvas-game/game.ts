@@ -129,7 +129,7 @@ const updateCellWidget = (button: Button, symbol: number | symbol, isGameOver: b
     }
 };
 
-export type GameLevelFactory = () => Minesweeper;
+export type GameLevel = readonly [cols: number, rows: number, mines: number];
 
 export class Game {
     private readonly canvas: HTMLCanvasElement;
@@ -137,6 +137,7 @@ export class Game {
     private readonly manager = new WidgetManager();
     private readonly abortController = new AbortController();
 
+    private currentLevel: GameLevel;
     private minesweeper: Minesweeper;
     private snapshot: MinesweeperSnapshot;
     private cells: Button[] = [];
@@ -151,13 +152,11 @@ export class Game {
     private touchStartX = 0;
     private touchStartY = 0;
 
-    constructor(
-        container: HTMLElement,
-        private readonly levelFactory: GameLevelFactory,
-    ) {
+    constructor(container: HTMLElement, initialLevel: GameLevel) {
         prepareSprite();
 
-        this.minesweeper = this.levelFactory();
+        this.currentLevel = initialLevel;
+        this.minesweeper = new Minesweeper(...initialLevel);
         this.snapshot = this.minesweeper.getSnapShot();
         this.aimState = initAim(this.snapshot.cols * CELL_SIZE, this.snapshot.rows * CELL_SIZE);
 
@@ -195,7 +194,8 @@ export class Game {
         this.canvas.width = this.canvasWidth * dpr;
         this.canvas.height = this.canvasHeight * dpr;
         this.canvas.style.width = this.canvasWidth + 'px';
-        this.canvas.style.height = this.canvasHeight + 'px';
+        // No inline style.height — the CSS rule `height: auto` lets the browser preserve the
+        // aspect ratio when max-width: 100% shrinks the canvas on narrow viewports.
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.manager.resize(this.canvasWidth, this.canvasHeight);
     }
@@ -461,9 +461,18 @@ export class Game {
         this.refreshSnapshot();
     }
 
+    setLevel(cols: number, rows: number, mines: number): void {
+        this.currentLevel = [cols, rows, mines];
+        this.resetGame();
+    }
+
     private handleStart(): void {
+        this.resetGame();
+    }
+
+    private resetGame(): void {
         const oldDims = {cols: this.snapshot.cols, rows: this.snapshot.rows};
-        this.minesweeper = this.levelFactory();
+        this.minesweeper = new Minesweeper(...this.currentLevel);
         this.snapshot = this.minesweeper.getSnapShot();
         this.timerStart = null;
         this.timerEnd = null;
