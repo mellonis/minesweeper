@@ -27,6 +27,7 @@ import {
     MARKS_COUNTER_Y_POSITION,
     Panel,
     prepareSprite,
+    PreviewRenderer,
     START_BUTTON_SIZE,
     START_BUTTON_Y_POSITION,
     TIMER_Y_POSITION,
@@ -146,6 +147,8 @@ export class Game {
     private lastActivity = -1;
     private timerStart: number | null = null;
     private timerEnd: number | null = null;
+    private pausedAt: number | null = null;
+    private previewRenderer: PreviewRenderer | null = null;
     private rafId = 0;
     private touchPressTimer: ReturnType<typeof setTimeout> | null = null;
     private touchLongPressFired = false;
@@ -264,7 +267,7 @@ export class Game {
             },
             render: (c) => {
                 if (this.timerStart === null) return drawCommonCounter(c, 888);
-                const end = this.timerEnd ?? performance.now();
+                const end = this.timerEnd ?? this.pausedAt ?? performance.now();
                 drawCommonCounter(c, Math.floor((end - this.timerStart) / 1000));
             },
         }));
@@ -462,8 +465,82 @@ export class Game {
     }
 
     setLevel(cols: number, rows: number, mines: number): void {
+        // Instant level change (preset path). Any active config preview is discarded.
+        this.teardownPreview();
+        this.pausedAt = null;
         this.currentLevel = [cols, rows, mines];
         this.resetGame();
+    }
+
+    pause(): void {
+        if (this.previewRenderer !== null) return;
+        this.pausedAt = performance.now();
+        this.aimVisible = false;
+        const toSnap = this.minesweeper.getRevealedSnapshot();
+        this.snapshot = toSnap;
+        this.addPreviewRenderer(toSnap);
+    }
+
+    resume(): void {
+        if (this.previewRenderer === null) return;
+        this.teardownPreview();
+
+        // If preview dragged through different dims, the canvas/chrome were resized to follow.
+        // Snap back to the running game's actual dims here.
+        const prevSnapshot = this.snapshot;
+        this.snapshot = this.minesweeper.getSnapShot();
+        if (
+            this.snapshot.cols !== prevSnapshot.cols ||
+            this.snapshot.rows !== prevSnapshot.rows
+        ) {
+            this.setupCanvas();
+            this.buildWidgets();
+        }
+
+        if (this.pausedAt !== null && this.timerStart !== null && this.timerEnd === null) {
+            this.timerStart += performance.now() - this.pausedAt;
+        }
+        this.pausedAt = null;
+    }
+
+    setPreviewSnapshot(snapshot: MinesweeperSnapshot): void {
+        if (this.previewRenderer === null) return;
+
+        const dimsChanged =
+            snapshot.cols !== this.snapshot.cols || snapshot.rows !== this.snapshot.rows;
+        this.snapshot = snapshot;
+
+        if (dimsChanged) {
+            // Whole canvas (chrome + field) follows the slider; preview always renders at native
+            // CELL_SIZE inside the resized field. buildWidgets() wipes the manager.
+            this.setupCanvas();
+            this.buildWidgets();
+            this.previewRenderer = null;
+        }
+
+        if (this.previewRenderer === null) {
+            this.addPreviewRenderer(snapshot);
+        } else {
+            this.previewRenderer.setSnapshot(snapshot);
+        }
+    }
+
+    private addPreviewRenderer(snapshot: MinesweeperSnapshot): void {
+        const fieldWidth = snapshot.cols * CELL_SIZE;
+        const fieldHeight = snapshot.rows * CELL_SIZE;
+        this.previewRenderer = new PreviewRenderer({
+            bounds: {x: FIELD_X_POSITION, y: FIELD_Y_POSITION, w: fieldWidth, h: fieldHeight},
+            z: 20,
+            snapshot,
+        });
+        this.manager.add(this.previewRenderer);
+    }
+
+    private teardownPreview(): void {
+        if (this.previewRenderer !== null) {
+            this.manager.remove(this.previewRenderer);
+            this.previewRenderer = null;
+        }
     }
 
     private handleStart(): void {
@@ -530,6 +607,7 @@ export class Game {
 
             if (!this.aimVisible
                 && snapshot.isGameOver === false
+                && this.pausedAt === null
                 && this.lastActivity >= 0
                 && now - this.lastActivity > AIM_IDLE_MS) {
                 this.aimVisible = true;
@@ -556,7 +634,8 @@ export class Game {
                 || press !== lastPress
                 || (timerRunning && second !== lastSecond)
                 || aimMoved
-                || aimVisibilityChanged) {
+                || aimVisibilityChanged
+                || this.previewRenderer !== null) {
                 this.canvas.style.cursor = hover ? 'pointer' : 'default';
                 this.manager.draw(this.ctx);
                 lastSnapshot = snapshot;
