@@ -48,22 +48,25 @@ export class Cell {
     this.#neighbourMinesCount = Cell.#getNeighbourMinesCells(this.#neighboursGenerator(), isMineCellPredicate).length;
   }
 
-  reveal(isGameEnded = false): boolean {
+  reveal(isGameEnded = false): number {
     if (this.#isRevealed || this.#isMarked) {
-      return false;
+      return 0;
     }
 
     this.#isRevealed = true;
 
     if (isGameEnded || this.#isMine) {
-      return this.#isMine;
+      return 1;
     }
 
+    let count = 1;
     if (this.#neighbourMinesCount === 0) {
-      Cell.#getNeighbourMinesCells(this.#neighboursGenerator(), isNotMineCellPredicate).forEach((cell) => cell.reveal());
+      Cell.#getNeighbourMinesCells(this.#neighboursGenerator(), isNotMineCellPredicate).forEach((cell) => {
+        count += cell.reveal();
+      });
     }
 
-    return false;
+    return count;
   }
 
   mark(): number {
@@ -72,7 +75,7 @@ export class Cell {
       return 1;
     }
 
-    if (!this.#isRevealed && !this.#isMarked) {
+    if (!this.#isRevealed) {
       this.#isMarked = true;
       return -1;
     }

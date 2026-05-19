@@ -47,24 +47,24 @@ describe('Cell', () => {
     });
 
     describe('reveal', () => {
-        it('should reveal unmarked cell', () => {
+        it('should reveal unmarked cell and report it as newly revealed', () => {
             const cell = new Cell(false, mockNeighboursGenerator);
             cell.countNeighbourMines();
-            expect(cell.reveal()).toBe(false);
+            expect(cell.reveal()).toBe(1);
             expect(cell.isRevealed).toBe(true);
         });
 
         it('should not reveal marked cell', () => {
             const cell = new Cell(false, mockNeighboursGenerator);
             cell.mark();
-            expect(cell.reveal()).toBe(false);
+            expect(cell.reveal()).toBe(0);
             expect(cell.isRevealed).toBe(false);
         });
 
-        it('should reveal mine and return true', () => {
+        it('should reveal mine and report it as newly revealed', () => {
             const cell = new Cell(true, mockNeighboursGenerator);
             cell.countNeighbourMines();
-            expect(cell.reveal()).toBe(true);
+            expect(cell.reveal()).toBe(1);
         });
 
         it('should reveal neighbors for empty cell', () => {
@@ -147,13 +147,13 @@ describe('Cell', () => {
             const cell = new Cell(false, mockNeighboursGenerator);
             cell.countNeighbourMines();
             cell.reveal();
-            expect(cell.reveal()).toBe(false); // Second reveal attempt
+            expect(cell.reveal()).toBe(0); // Already revealed — no new cells
         });
 
         it('should handle game ended state', () => {
             const cell = new Cell(true, mockNeighboursGenerator);
             cell.countNeighbourMines();
-            expect(cell.reveal(true)).toBe(true);
+            expect(cell.reveal(true)).toBe(1);
         });
     });
 });

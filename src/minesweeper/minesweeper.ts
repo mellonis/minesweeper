@@ -55,6 +55,7 @@ export class Minesweeper {
     readonly #mines: number;
     readonly #field: Cell[][] = [];
     #marksLeft: number
+    #revealedCount = 0;
     #explodedCell: [number, number] | null = null;
     #isWin = false;
     #isLose = false;
@@ -152,27 +153,13 @@ export class Minesweeper {
         }
 
         const cell = this.#field[col][row];
-        const isMine = cell.reveal(this.#isGameOver);
+        this.#revealedCount += cell.reveal();
 
-        if (isMine) {
+        if (cell.isMine) {
             this.#explodedCell = [col, row];
             this.#lose();
-        } else {
-            const [minesCount, unrevealedCount] = this.#field.flat().reduce((result, {isRevealed, isMine}) => {
-                if (isMine) {
-                    result[0]++;
-                }
-
-                if (!isRevealed) {
-                    result[1]++;
-                }
-
-                return result;
-            }, [0, 0]);
-
-            if (minesCount === unrevealedCount) {
-                this.#win();
-            }
+        } else if (this.#revealedCount === this.#cols * this.#rows - this.#mines) {
+            this.#win();
         }
     }
 
@@ -268,15 +255,15 @@ export class Minesweeper {
     }
 
     #checkIndex(index: number): boolean {
-        return !(!Number.isInteger(index) || index >= this.#cols * this.#rows);
+        return !(!Number.isInteger(index) || index < 0 || index >= this.#cols * this.#rows);
     }
 
     #checkCol(col: number): boolean {
-        return !(!Number.isInteger(col) || col > this.#cols);
+        return !(!Number.isInteger(col) || col < 0 || col >= this.#cols);
     }
 
     #checkRow(row: number): boolean {
-        return !(!Number.isInteger(row) || row > this.#rows);
+        return !(!Number.isInteger(row) || row < 0 || row >= this.#rows);
     }
 
     #getNeighboursGenerator(col: number, row: number) {
@@ -322,7 +309,7 @@ export class Minesweeper {
     }
 
     #lose(): void {
-        this.#field.flat().forEach((cell) => cell.reveal());
+        this.#field.flat().forEach((cell) => cell.reveal(true));
         this.#isLose = true;
     }
 
