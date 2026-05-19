@@ -2,6 +2,10 @@
 
 💣 Yet another Minesweeper. Vanilla TypeScript, no framework. Live at [mines.mellonis.ru](https://mines.mellonis.ru).
 
+
+https://github.com/user-attachments/assets/372e787e-d5b0-429a-82aa-4c2f1049783d
+
+
 ## Run
 
 - `npm run dev` — Vite dev server with HMR
