@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import { Minesweeper } from './minesweeper';
-import { cell, mark, mine } from './symbols';
+import { cell, explosion, lose, mark, mine, win } from './symbols';
 
 describe('Minesweeper', () => {
     describe('marking before first reveal', () => {
@@ -34,6 +34,80 @@ describe('Minesweeper', () => {
             game.mark({ index: unrevealed });
 
             expect(game.getSnapShot().marksLeft).toBe(2);
+        });
+    });
+
+    describe('bounds validation', () => {
+        it('rejects col equal to cols', () => {
+            const game = new Minesweeper(9, 9, 10);
+            expect(() => game.reveal({ col: 9, row: 0 })).toThrow('Invalid col value');
+        });
+
+        it('rejects negative col', () => {
+            const game = new Minesweeper(9, 9, 10);
+            expect(() => game.reveal({ col: -1, row: 0 })).toThrow('Invalid col value');
+        });
+
+        it('rejects row equal to rows', () => {
+            const game = new Minesweeper(9, 9, 10);
+            expect(() => game.reveal({ col: 0, row: 9 })).toThrow('Invalid row value');
+        });
+
+        it('rejects negative row', () => {
+            const game = new Minesweeper(9, 9, 10);
+            expect(() => game.reveal({ col: 0, row: -1 })).toThrow('Invalid row value');
+        });
+
+        it('rejects index equal to cols*rows', () => {
+            const game = new Minesweeper(5, 4, 3);
+            expect(() => game.reveal({ index: 20 })).toThrow('Invalid index value');
+        });
+
+        it('rejects negative index', () => {
+            const game = new Minesweeper(5, 4, 3);
+            expect(() => game.reveal({ index: -1 })).toThrow('Invalid index value');
+        });
+
+        it('rejects non-integer col', () => {
+            const game = new Minesweeper(9, 9, 10);
+            expect(() => game.reveal({ col: 1.5, row: 0 })).toThrow('Invalid col value');
+        });
+    });
+
+    describe('win flow', () => {
+        it('reaches isGameOver = win once every non-mine cell is revealed', () => {
+            // 3x3 with 8 mines leaves exactly one non-mine cell (the first-click safe cell),
+            // so a single reveal at the center wins deterministically — no Math.random mock needed.
+            const game = new Minesweeper(3, 3, 8);
+            game.reveal({ col: 1, row: 1 });
+
+            const snap = game.getSnapShot();
+            expect(snap.isGameOver).toBe(win);
+            // The revealed center cell touches all 8 mines.
+            expect(snap.cells[4]).toBe(8);
+        });
+    });
+
+    describe('lose flow', () => {
+        it('exposes all mines as mine/explosion and sets isGameOver = lose', () => {
+            // Pin mine placement: Math.random → 0 makes placeMines pick options[0] each
+            // iteration. For 3x3 with 7 mines and a center first-click, the lone other
+            // non-mine ends up at idx 8; idx 0 is a mine, so revealing it loses.
+            const originalRandom = Math.random;
+            Math.random = () => 0;
+            try {
+                const game = new Minesweeper(3, 3, 7);
+                game.reveal({ col: 1, row: 1 });
+                game.reveal({ index: 0 });
+
+                const snap = game.getSnapShot();
+                expect(snap.isGameOver).toBe(lose);
+                const exposed = snap.cells.filter((c) => c === mine || c === explosion);
+                expect(exposed).toHaveLength(7);
+                expect(snap.cells.filter((c) => c === explosion)).toHaveLength(1);
+            } finally {
+                Math.random = originalRandom;
+            }
         });
     });
 
